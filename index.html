@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outlet performance</title>
+<style>
+  :root{
+    --bg:#f4f3f0; --card:#fcfcfb; --line:#e4e2dc; --zebra:#f5f4f1;
+    --ink:#1f1f1d; --ink2:#5d5c57; --ink3:#8a8982;
+    --bar:#8c97a6; --bad:#d23f3e; --accent:#eb6834; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 56px}
+  h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
+  h1::after{content:"";display:block;width:36px;height:3px;border-radius:2px;background:var(--accent);margin-top:8px}
+  .sub{color:var(--ink2);font-size:13px;margin:6px 0 14px}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .filters button{border:1px solid var(--line);background:var(--card);padding:6px 14px;border-radius:9px;font:inherit;font-size:13px;color:var(--ink2);cursor:pointer}
+  .filters button:hover{color:var(--ink)}
+  .filters button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .filters button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+  .kpi{display:flex;justify-content:space-between;align-items:flex-end;gap:8px}
+  .kpi .label{font-size:13px;font-weight:600;border-bottom:1px dotted var(--ink3);display:inline-block}
+  .kpi .value{font-size:22px;font-weight:650;margin-top:6px;letter-spacing:-.02em;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .kpi .note{font-size:12px;color:var(--ink2);margin-top:2px}
+  .kpi svg{width:84px;height:34px;flex:none}
+  .grid{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px}
+  h2{margin:0 0 2px;font-size:14px;font-weight:650}
+  .hint{font-size:12px;color:var(--ink2);margin-bottom:12px}
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--ink2);margin-bottom:8px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  #chart{position:relative}
+  #chart svg{display:block;width:100%;height:auto;overflow:visible}
+  #chart text{font-family:inherit;fill:var(--ink2);font-size:11px}
+  #chart .pct{fill:var(--ink);font-weight:600;font-size:12px}
+  .bar{cursor:pointer}
+  .tip{position:absolute;pointer-events:none;background:#1f1f1d;color:#fff;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.5;opacity:0;transition:opacity .08s;white-space:nowrap;z-index:2}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th{font-size:12px;font-weight:500;color:var(--ink3);text-align:left;padding:6px 10px}
+  td{padding:10px;font-size:14px}
+  th.r,td.r{text-align:right}
+  tbody tr:nth-child(odd){background:var(--zebra)}
+  tbody tr td:first-child{border-radius:8px 0 0 8px}tbody tr td:last-child{border-radius:0 8px 8px 0}
+  tfoot td{font-weight:650;border-top:1px solid var(--line)}
+  .neg{color:var(--bad);font-weight:600}
+  .attn-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:14px}
+  .attn-head h2{font-size:22px;letter-spacing:-.01em;margin-bottom:4px}
+  .chips{display:flex;gap:8px;margin-top:10px}
+  .chip{font-size:13px;padding:3px 12px;border-radius:999px}
+  .chip.high{background:#f6dcdb;color:#9b2423}
+  .chip.med{background:#fbe3d6;color:#a8440f}
+  .ring{position:relative;width:96px;height:96px;flex:none}
+  .ring b{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;line-height:1}
+  .ring small{font-size:11px;font-weight:400;color:var(--ink2)}
+  .sev{font-size:12px;padding:2px 10px;border-radius:999px}
+  .sev.high{background:#f6dcdb;color:#9b2423}.sev.med{background:#fbe3d6;color:#a8440f}
+  .empty{color:var(--ink2);padding:8px 0}
+  .wrap{position:relative}
+  #userbar{position:absolute;top:28px;right:20px;display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink2)}
+  #userbar button{border:1px solid var(--line);background:var(--card);padding:6px 14px;border-radius:9px;font:inherit;font-size:13px;color:var(--ink2);cursor:pointer}
+  #userbar button:hover{color:var(--ink)}
+  #userbar button[aria-pressed="true"]{border-color:var(--accent);color:var(--ink)}
+  .role{font-size:12px;padding:2px 10px;border-radius:999px;background:#ecebe7;color:var(--ink2)}
+  .role.admin{background:#fbe3d6;color:#a8440f}
+  #login{max-width:360px;margin:48px auto}
+  label{display:block;font-size:12px;color:var(--ink2);margin:12px 0 4px}
+  input,select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;background:#fff}
+  input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .primary{margin-top:16px;padding:10px 18px;border:0;border-radius:9px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+  #login .primary{width:100%}
+  .primary:disabled{opacity:.6;cursor:wait}
+  .msg{font-size:13px;margin-top:10px;min-height:18px;color:#9b2423}
+  .msg.ok{color:#2d6a3e}
+  .adduser{display:grid;grid-template-columns:1fr 1fr 140px auto;gap:12px;align-items:end;margin-top:14px}
+  .adduser label{margin-top:0}.adduser .primary{margin-top:0}
+  #usersPanel{margin-bottom:14px}
+  @media (max-width:860px){.adduser{grid-template-columns:1fr 1fr}#userbar{position:static;margin-bottom:10px;flex-wrap:wrap}}
+  @media (max-width:860px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Outlet performance</h1>
+  <div id="userbar" hidden>
+    <span id="who"></span>
+    <button id="usersBtn" type="button" aria-pressed="false" hidden>Users</button>
+    <button id="signout" type="button">Sign out</button>
+  </div>
+  <form id="login" class="card" hidden>
+    <h2 style="font-size:16px">Sign in</h2>
+    <div class="hint" style="margin:0">Use your username and password.</div>
+    <label for="username">Username</label><input id="username" autocomplete="username" autocapitalize="none" required>
+    <label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
+    <button class="primary" type="submit">Sign in</button>
+    <div class="msg" id="loginMsg" role="alert"></div>
+  </form>
+  <div id="app" hidden>
+  <section class="card" id="usersPanel" hidden></section>
+  <div class="sub" id="range"></div>
+  <div class="filters" id="filters" role="group" aria-label="Filter by outlet"></div>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Sales as % of target</h2>
+      <div class="hint">One bar per outlet-week. Dashed line = 100% of target.</div>
+      <div class="legend">
+        <span><i style="background:var(--bar)"></i>90% or above</span>
+        <span><i style="background:var(--bad)"></i>Below 90%</span>
+      </div>
+      <div id="chart"></div>
+    </div>
+    <div class="card">
+      <h2 id="bdTitle">Sales breakdown</h2>
+      <div class="hint" id="bdHint"></div>
+      <div id="breakdown"></div>
+    </div>
+  </section>
+
+  <section class="card" id="attn"></section>
+  </div>
+</div>
+
+<script>
+/* ---------- DATA LAYER: auth, users, and the only place that loads outlet data ----------
+   Supabase Auth (passwords live in auth.users). The publishable key is public by design;
+   Row Level Security decides what each signed-in user can read. */
+const SUPABASE_URL = "https://nnjqfkewwjdsuohgdnav.supabase.co";
+const SUPABASE_KEY = "sb_publishable_honW68AQJhvoLhjG8GP7vQ_SE4TTs3y";
+const EMAIL_DOMAIN = "example.com";            // username "priya" signs in as priya@example.com
+const SESSION_KEY = "outlet-dash-session";
+let memSession = null;
+
+const store = {
+  get(){ try { return JSON.parse(localStorage.getItem(SESSION_KEY)) } catch { return memSession } },
+  set(s){ memSession = s; try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)) } catch {} },
+  clear(){ memSession = null; try { localStorage.removeItem(SESSION_KEY) } catch {} }
+};
+const authError = () => { const e = new Error("Not signed in"); e.status = 401; return e; };
+
+async function authRequest(grant, body){
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=${grant}`, {
+    method: "POST", headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(grant === "password" ? "Wrong username or password" : (j.error_description || "Sign-in failed"));
+  store.set({ access_token: j.access_token, refresh_token: j.refresh_token, expires_at: j.expires_at });
+  return j;
+}
+const signIn = (username, password) =>
+  authRequest("password", { email: username.includes("@") ? username.trim() : `${username.trim().toLowerCase()}@${EMAIL_DOMAIN}`, password });
+
+async function getToken(){
+  const s = store.get(); if (!s) return null;
+  if (s.expires_at && s.expires_at - 60 > Date.now()/1000) return s.access_token;
+  try { return (await authRequest("refresh_token", { refresh_token: s.refresh_token })).access_token; }
+  catch { store.clear(); return null; }
+}
+const userIdFrom = token => JSON.parse(atob(token.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))).sub;
+
+async function signOut(){
+  const s = store.get(); store.clear();
+  if (s) fetch(`${SUPABASE_URL}/auth/v1/logout`, { method:"POST", headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${s.access_token}` } }).catch(()=>{});
+}
+
+async function api(path, opts = {}){
+  const token = await getToken(); if (!token) throw authError();
+  const res = await fetch(`${SUPABASE_URL}${path}`, { ...opts, headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, ...(opts.headers||{}) } });
+  if (res.status === 401) throw authError();
+  return res;
+}
+
+async function loadData(){
+  const res = await api("/rest/v1/outlet_weeks?select=outlet,week,sales,target,orders,returns&order=week.asc,outlet.asc");
+  if (res.status === 403) throw authError();
+  if (!res.ok) throw new Error(`Supabase ${res.status}: ${await res.text()}`);
+  const rows = await res.json();
+  if (!rows.length) throw new Error("No rows in outlet_weeks");
+  return rows.map(r => ({ outlet:r.outlet, week:r.week, sales:Number(r.sales), target:Number(r.target), orders:Number(r.orders), returns:Number(r.returns) }));
+}
+
+async function loadProfiles(){            // admins get everyone; viewers get only themselves (RLS)
+  const res = await api("/rest/v1/profiles?select=id,username,role,created_at&order=created_at.asc");
+  if (!res.ok) throw new Error(`Supabase ${res.status}`);
+  return res.json();
+}
+
+async function addUser(username, password, role){   // admin-only Edge Function (create-user)
+  const res = await api("/functions/v1/create-user", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ username, password, role }) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || "Could not add user");
+  return j;
+}
+
+/* ---------- helpers ---------- */
+const THRESHOLD = 0.9, HIGH = 0.85;           // High severity below 85%, Medium 85% to under 90%
+const OUTLETS = ["All","Tampines","Jurong","Orchard"];
+const sgd = n => "SGD " + n.toLocaleString("en-SG",{minimumFractionDigits:2,maximumFractionDigits:2});
+const int = n => n.toLocaleString("en-SG");
+const pct = (n,d=1) => (n*100).toFixed(d) + "%";
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmtDate = iso => { const [y,m,d] = iso.split("-"); return `${d} ${MONTHS[+m-1]} ${y}`; };
+const shortDate = iso => { const [,m,d] = iso.split("-"); return `${d} ${MONTHS[+m-1]}`; };
+const sum = (rows,k) => rows.reduce((a,r)=>a+r[k],0);
+const sev = v => v < HIGH ? "high" : "med";
+
+let ALL = [], current = "All";
+
+function spark(vals){
+  const w=84,h=34,p=4, min=Math.min(...vals), max=Math.max(...vals), rng=(max-min)||1;
+  const pts = vals.map((v,i)=>[p+i*(w-2*p)/Math.max(vals.length-1,1), h-p-((v-min)/rng)*(h-2*p)]);
+  const last = pts[pts.length-1];
+  return `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline fill="none" stroke="var(--bar)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pts.map(p=>p.join(",")).join(" ")}"/><circle cx="${last[0]}" cy="${last[1]}" r="3" fill="var(--accent)"/></svg>`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const rows = current === "All" ? ALL : ALL.filter(r => r.outlet === current);
+  const weeks = [...new Set(rows.map(r=>r.week))].sort();
+  const byWeek = weeks.map(w => rows.filter(r=>r.week===w));
+
+  document.getElementById("filters").innerHTML = OUTLETS.map(o =>
+    `<button type="button" aria-pressed="${o===current}" data-o="${o}">${o==="All"?"All outlets":o}</button>`).join("");
+  document.getElementById("range").textContent =
+    `${fmtDate(weeks[0])} to ${fmtDate(weeks[weeks.length-1])} · ${current === "All" ? "all outlets" : current}`;
+
+  const sales=sum(rows,"sales"), target=sum(rows,"target"), orders=sum(rows,"orders"), returns=sum(rows,"returns");
+  const kpis = [
+    ["Total sales", sgd(sales), `Target ${sgd(target)}`, byWeek.map(g=>sum(g,"sales"))],
+    ["% of target", pct(sales/target), `${sales>=target?"Above":"Below"} by ${sgd(Math.abs(sales-target))}`, byWeek.map(g=>sum(g,"sales")/sum(g,"target"))],
+    ["Orders", int(orders), `${rows.length} outlet-weeks`, byWeek.map(g=>sum(g,"orders"))],
+    ["Returns %", pct(returns/orders,2), `${int(returns)} returns of ${int(orders)} orders`, byWeek.map(g=>sum(g,"returns")/sum(g,"orders"))],
+  ];
+  document.getElementById("kpis").innerHTML = kpis.map(k =>
+    `<div class="card kpi"><div><div class="label">${k[0]}</div><div class="value">${k[1]}</div><div class="note">${k[2]}</div></div>${spark(k[3])}</div>`).join("");
+
+  drawChart(rows);
+  drawBreakdown(rows);
+  drawAttention(rows);
+}
+
+function drawChart(rows){
+  const el = document.getElementById("chart");
+  const W=640,H=300,m={t:24,r:10,b:48,l:40}, iw=W-m.l-m.r, ih=H-m.t-m.b;
+  const maxV = Math.max(1.1, ...rows.map(r=>r.sales/r.target));
+  const y = v => m.t+ih-(v/maxV)*ih;
+  const step = iw/rows.length, bw = Math.min(46, step*0.62);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Sales as percent of target per outlet-week">`;
+  [0,.25,.5,.75,1].forEach(t => s += `<line x1="${m.l}" x2="${W-m.r}" y1="${y(t)}" y2="${y(t)}" stroke="#e4e2dc"/><text x="${m.l-6}" y="${y(t)+4}" text-anchor="end">${t*100}%</text>`);
+  rows.forEach((r,i) => {
+    const v=r.sales/r.target, bad=v<THRESHOLD, x=m.l+i*step+(step-bw)/2, top=y(v), cx=x+bw/2;
+    s += `<path class="bar" data-i="${i}" fill="${bad?"var(--bad)":"var(--bar)"}" d="M${x},${y(0)}V${top+4}Q${x},${top} ${x+4},${top}H${x+bw-4}Q${x+bw},${top} ${x+bw},${top+4}V${y(0)}Z"/>`;
+    s += `<text class="pct" x="${cx}" y="${top-6}" text-anchor="middle">${(v*100).toFixed(1)}%${bad?" ▼":""}</text>`;
+    s += `<text x="${cx}" y="${H-m.b+16}" text-anchor="middle">${current==="All"?r.outlet:shortDate(r.week)}</text>`;
+    s += `<text x="${cx}" y="${H-m.b+30}" text-anchor="middle" style="fill:var(--ink3)">${current==="All"?shortDate(r.week):""}</text>`;
+  });
+  s += `<line x1="${m.l}" x2="${W-m.r}" y1="${y(1)}" y2="${y(1)}" stroke="#1f1f1d" stroke-dasharray="4 4"/></svg><div class="tip" id="tip"></div>`;
+  el.innerHTML = s;
+  const tip = document.getElementById("tip");
+  el.querySelectorAll(".bar").forEach(b => {
+    const r = rows[+b.dataset.i];
+    b.addEventListener("mousemove", e => {
+      tip.innerHTML = `<b>${r.outlet}</b> · ${fmtDate(r.week)}<br>Sales ${sgd(r.sales)}<br>Target ${sgd(r.target)}<br>${(r.sales/r.target*100).toFixed(1)}% of target`;
+      const box = el.getBoundingClientRect();
+      tip.style.left = Math.min(e.clientX-box.left+12, box.width-170)+"px";
+      tip.style.top = (e.clientY-box.top-70)+"px"; tip.style.opacity = 1; });
+    b.addEventListener("mouseleave", () => tip.style.opacity = 0);
+  });
+}
+
+function drawBreakdown(rows){
+  const byOutlet = current === "All";
+  document.getElementById("bdTitle").textContent = byOutlet ? "Sales by outlet" : `Sales by week`;
+  document.getElementById("bdHint").textContent = byOutlet ? "Selected period, SGD" : `${current}, SGD`;
+  const groups = byOutlet ? OUTLETS.slice(1).map(o => [o, rows.filter(r=>r.outlet===o)])
+                          : rows.map(r => [shortDate(r.week), [r]]);
+  const body = groups.map(([label,g]) => { const tg = sum(g,"target"), v = tg ? sum(g,"sales")/tg : null;
+    return `<tr><td>${label}</td><td class="r">${int(sum(g,"sales"))}</td><td class="r ${!byOutlet && v !== null && v<THRESHOLD?"neg":""}">${v === null ? "-" : pct(v)}</td></tr>`; }).join("");
+  document.getElementById("breakdown").innerHTML =
+    `<table><thead><tr><th>${byOutlet?"Outlet":"Week"}</th><th class="r">Sales</th><th class="r">% target</th></tr></thead><tbody>${body}</tbody>
+     <tfoot><tr><td>Total</td><td class="r">${int(sum(rows,"sales"))}</td><td class="r">${pct(sum(rows,"sales")/sum(rows,"target"))}</td></tr></tfoot></table>`;
+}
+
+function drawAttention(rows){
+  const bad = rows.filter(r => r.sales/r.target < THRESHOLD).sort((a,b)=>a.sales/a.target-b.sales/b.target);
+  const el = document.getElementById("attn");
+  if(!bad.length){ el.innerHTML = `<h2 style="font-size:22px">Nothing needs attention</h2><div class="empty">Every outlet-week is at or above 90% of target.</div>`; return; }
+  const hi = bad.filter(r=>sev(r.sales/r.target)==="high").length, me = bad.length-hi;
+  const top = bad[0], C = 2*Math.PI*40, frac = bad.length/rows.length;
+  el.innerHTML = `
+    <div class="attn-head">
+      <div>
+        <h2>${bad.length} outlet-week${bad.length>1?"s":""} need attention</h2>
+        <div class="hint" style="margin:0">Largest gap: ${top.outlet}, week of ${fmtDate(top.week)}, ${sgd(top.target-top.sales)} short.</div>
+        <div class="chips">${hi?`<span class="chip high">${hi} high</span>`:""}${me?`<span class="chip med">${me} medium</span>`:""}</div>
+      </div>
+      <div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="#e4e2dc" stroke-width="9"/>
+        <circle cx="50" cy="50" r="40" fill="none" stroke="var(--bad)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${C*frac} ${C}" transform="rotate(-90 50 50)"/></svg>
+        <b>${bad.length}<small>of ${rows.length}</small></b></div>
+    </div>
+    <table><thead><tr><th>#</th><th>Outlet-week</th><th>Severity</th><th class="r">% of target</th><th class="r">Shortfall</th></tr></thead><tbody>
+    ${bad.map((r,i)=>{const v=r.sales/r.target, s=sev(v);
+      return `<tr><td>${i+1}</td><td>${r.outlet} · ${fmtDate(r.week)}</td><td><span class="sev ${s}">${s==="high"?"High":"Medium"}</span></td><td class="r neg">${pct(v)}</td><td class="r">${sgd(r.target-r.sales)}</td></tr>`;}).join("")}
+    </tbody></table>
+    <div class="hint" style="margin:10px 0 0">High = below 85% of target. Medium = 85% to under 90%.</div>`;
+}
+
+document.getElementById("filters").addEventListener("click", e => {
+  const b = e.target.closest("button"); if(!b) return; current = b.dataset.o; render();
+});
+const $ = id => document.getElementById(id);
+let PROFILES = [], ME = null;
+
+function showLogin(msg=""){ $("app").hidden = true; $("userbar").hidden = true; $("login").hidden = false; $("loginMsg").className = "msg"; $("loginMsg").textContent = msg; }
+
+function renderUsers(note = ""){
+  const el = $("usersPanel");
+  el.innerHTML = `<h2>Users</h2><div class="hint">Add a user and set their initial password. They can sign in straight away.</div>
+    <table><thead><tr><th>Username</th><th>Role</th><th class="r">Added</th></tr></thead><tbody>
+    ${PROFILES.map(p => `<tr><td>${p.username}</td><td><span class="role ${p.role}">${p.role}</span></td><td class="r">${fmtDate(p.created_at.slice(0,10))}</td></tr>`).join("")}
+    </tbody></table>
+    <form id="addUser" class="adduser">
+      <div><label for="nu">Username</label><input id="nu" autocapitalize="none" required pattern="[A-Za-z0-9_.\\-]{2,32}"></div>
+      <div><label for="np">Initial password</label><input id="np" type="text" autocomplete="off" minlength="6" required></div>
+      <div><label for="nr">Role</label><select id="nr"><option value="viewer">viewer</option><option value="admin">admin</option></select></div>
+      <button class="primary" type="submit">Add user</button>
+    </form>
+    <div class="msg ${note.startsWith("Added") ? "ok" : ""}" id="addMsg" role="status">${note}</div>`;
+  $("addUser").addEventListener("submit", async e => {
+    e.preventDefault(); const btn = e.target.querySelector("button"); btn.disabled = true;
+    try {
+      const r = await addUser($("nu").value, $("np").value, $("nr").value);
+      PROFILES = await loadProfiles(); renderUsers(`Added ${r.username} (${r.role}).`);
+    } catch (err) { if (err.status === 401) return showLogin("Your session expired. Please sign in again."); $("addMsg").className = "msg"; $("addMsg").textContent = err.message; btn.disabled = false; }
+  });
+}
+
+async function start(){
+  try {
+    const token = await getToken(); if (!token) throw authError();
+    [ALL, PROFILES] = await Promise.all([loadData(), loadProfiles()]);
+    ME = PROFILES.find(p => p.id === userIdFrom(token));
+    $("who").innerHTML = `${ME ? ME.username : "Signed in"} <span class="role ${ME ? ME.role : ""}">${ME ? ME.role : ""}</span>`;
+    $("usersBtn").hidden = !(ME && ME.role === "admin");
+    $("usersPanel").hidden = true; $("usersBtn").setAttribute("aria-pressed","false");
+    $("login").hidden = true; $("app").hidden = false; $("userbar").hidden = false;
+    render();
+  } catch (err) {
+    if (err.status === 401) showLogin(store.get() ? "Your session expired. Please sign in again." : "");
+    else { $("login").hidden = true; $("app").hidden = false; $("app").innerHTML = `<p class="card">Could not load data: ${err.message}</p>`; $("userbar").hidden = false; }
+  }
+}
+$("login").addEventListener("submit", async e => {
+  e.preventDefault(); const btn = e.target.querySelector("button"); btn.disabled = true; $("loginMsg").textContent = "";
+  try { await signIn($("username").value, $("password").value); $("password").value = ""; await start(); }
+  catch (err) { $("loginMsg").className = "msg"; $("loginMsg").textContent = err.message; }
+  btn.disabled = false;
+});
+$("signout").addEventListener("click", async () => { await signOut(); ALL = []; PROFILES = []; ME = null; showLogin(); });
+$("usersBtn").addEventListener("click", () => {
+  const open = $("usersPanel").hidden; $("usersPanel").hidden = !open; $("usersBtn").setAttribute("aria-pressed", String(open));
+  if (open) renderUsers();
+});
+start();
+</script>
+</body>
+</html>
